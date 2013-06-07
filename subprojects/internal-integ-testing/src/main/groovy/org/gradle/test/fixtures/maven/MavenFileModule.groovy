@@ -23,6 +23,7 @@ import java.text.SimpleDateFormat
 
 class MavenFileModule extends AbstractModule implements MavenModule {
     private static final String MAVEN_METADATA_FILE = "maven-metadata.xml"
+    private static final String MAVEN_LOCAL_METADATA_FILE = "maven-metadata-local.xml"
     final TestFile moduleDir
     final String groupId
     final String artifactId
@@ -36,6 +37,7 @@ class MavenFileModule extends AbstractModule implements MavenModule {
     final timestampFormat = new SimpleDateFormat("yyyyMMdd.HHmmss")
     private final List artifacts = []
     private boolean uniqueSnapshots = true;
+    private boolean noChecksums = false;
 
     MavenFileModule(TestFile moduleDir, String groupId, String artifactId, String version) {
         this.moduleDir = moduleDir
@@ -90,8 +92,13 @@ class MavenFileModule extends AbstractModule implements MavenModule {
     }
 
     MavenFileModule withNonUniqueSnapshots() {
-        uniqueSnapshots = false;
-        return this;
+        uniqueSnapshots = false
+        return this
+    }
+
+    MavenFileModule withoutChecksums() {
+        noChecksums = true
+        return this
     }
 
     void assertNotPublished() {
@@ -134,15 +141,21 @@ class MavenFileModule extends AbstractModule implements MavenModule {
      */
     void assertArtifactsPublished(String... names) {
         def artifactNames = names as Set
-        if (uniqueSnapshots && version.endsWith('-SNAPSHOT')) {
-            artifactNames.add(MAVEN_METADATA_FILE)
+        if (version.endsWith('-SNAPSHOT')) {
+            if (uniqueSnapshots) {
+                artifactNames.add(MAVEN_METADATA_FILE)
+            } else {
+                artifactNames.add(MAVEN_LOCAL_METADATA_FILE)
+            }
         }
         assert moduleDir.isDirectory()
         Set actual = moduleDir.list() as Set
         for (name in artifactNames) {
             assert actual.remove(name)
-            assert actual.remove("${name}.md5" as String)
-            assert actual.remove("${name}.sha1" as String)
+            if (!noChecksums) {
+                assert actual.remove("${name}.md5" as String)
+                assert actual.remove("${name}.sha1" as String)
+            }
         }
         assert actual.isEmpty()
     }

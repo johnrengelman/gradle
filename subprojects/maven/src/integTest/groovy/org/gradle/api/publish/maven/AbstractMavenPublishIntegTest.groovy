@@ -16,9 +16,20 @@
 package org.gradle.api.publish.maven
 
 import org.gradle.integtests.fixtures.AbstractIntegrationSpec
+import org.gradle.test.fixtures.maven.M2Installation
 import org.gradle.test.fixtures.maven.MavenFileModule
 
 class AbstractMavenPublishIntegTest extends AbstractIntegrationSpec {
+
+    private M2Installation m2Installation = new M2Installation(testDirectory)
+
+    def setup() {
+        executer.beforeExecute m2Installation
+    }
+
+    M2Installation getM2Installation() {
+        m2Installation
+    }
 
     protected def resolveArtifact(MavenFileModule module, def extension, def classifier) {
         doResolveArtifacts("""
@@ -34,6 +45,14 @@ class AbstractMavenPublishIntegTest extends AbstractIntegrationSpec {
         resolve group: '${sq(module.groupId)}', name: '${sq(module.artifactId)}', version: '${sq(module.version)}'
     }
 """)
+    }
+
+    protected def resolveArtifactsFromMavenLocal(MavenFileModule module) {
+        doResolveArtifacts("""
+    dependencies {
+        resolve group: '${sq(module.groupId)}', name: '${sq(module.artifactId)}', version: '${sq(module.version)}'
+    }
+""", true)
     }
 
     protected def resolveArtifacts(MavenFileModule module, Map... additionalArtifacts) {
@@ -60,11 +79,21 @@ class AbstractMavenPublishIntegTest extends AbstractIntegrationSpec {
         doResolveArtifacts(dependencies)
     }
 
-    protected def doResolveArtifacts(def dependencies) {
+    protected def doResolveArtifacts(def dependencies, boolean useMavenLocal=false) {
         // Replace the existing buildfile with one for resolving the published module
         // TODO:DAZ Use a separate directory for resolving
         settingsFile.text = "rootProject.name = 'resolve'"
-        buildFile.text = """
+        buildFile.text = useMavenLocal ? getBuildFileForMavenLocal(dependencies) : getBuildFile(dependencies)
+
+        // TODO:DAZ Remove this requirement (by always publishing a jar/war/ear in tests?: Maven doesn't really support other file types as main artifact)
+        executer.withDeprecationChecksDisabled()
+        run "resolveArtifacts"
+        def artifactsList = file("artifacts").exists() ? file("artifacts").list() : []
+        return artifactsList.sort()
+    }
+
+    String getBuildFile(def dependencies) {
+        """
             configurations {
                 resolve
             }
@@ -79,12 +108,24 @@ class AbstractMavenPublishIntegTest extends AbstractIntegrationSpec {
             }
 
 """
+    }
 
-        // TODO:DAZ Remove this requirement (by always publishing a jar/war/ear in tests?: Maven doesn't really support other file types as main artifact)
-        executer.withDeprecationChecksDisabled()
-        run "resolveArtifacts"
-        def artifactsList = file("artifacts").exists() ? file("artifacts").list() : []
-        return artifactsList.sort()
+    String getBuildFileForMavenLocal(def dependencies) {
+        """
+            configurations {
+                resolve
+            }
+            repositories {
+                mavenLocal()
+                mavenCentral()
+            }
+            $dependencies
+            task resolveArtifacts(type: Sync) {
+                from configurations.resolve
+                into "artifacts"
+            }
+
+"""
     }
 
 

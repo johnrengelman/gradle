@@ -32,7 +32,7 @@ import javax.inject.Inject;
  * @since 1.4
  */
 @Incubating
-public class PublishToMavenLocal extends PublishToMavenRepository {
+public class PublishToMavenLocal extends PublishToMavenLocalRepository {
     private final BaseRepositoryFactory baseRepositoryFactory;
 
     @Inject

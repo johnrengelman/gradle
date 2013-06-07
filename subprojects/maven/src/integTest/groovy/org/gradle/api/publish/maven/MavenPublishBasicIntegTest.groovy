@@ -170,6 +170,57 @@ class MavenPublishBasicIntegTest extends AbstractMavenPublishIntegTest {
         resolveArtifacts(module) == ["snapshotPublish-${module.publishArtifactVersion}.jar"]
     }
 
+    def "can publish snapsnot version to maven local"() {
+        given:
+        def repoModule = mavenRepo.module('group', 'root', '1.0-SNAPSHOT')
+        def localModule = m2Repo.module('group', 'root', '1.0-SNAPSHOT').withNonUniqueSnapshots()
+
+        and:
+        settingsFile << "rootProject.name = 'root'"
+        buildFile << """
+            apply plugin: 'maven-publish'
+            apply plugin: 'java'
+
+            group = 'group'
+            version = '1.0-SNAPSHOT'
+
+            publishing {
+                repositories {
+                    maven { url "${mavenRepo.uri}" }
+                }
+                publications {
+                    maven(MavenPublication) {
+                        from components.java
+                    }
+                }
+            }
+        """
+
+        when:
+        succeeds 'assemble'
+
+        then: "jar is built but not published"
+        repoModule.assertNotPublished()
+        localModule.assertNotPublished()
+        file('build/libs/root-1.0-SNAPSHOT.jar').assertExists()
+
+        when:
+        succeeds 'publish'
+
+        then: "jar is published to defined maven repository"
+        repoModule.assertPublishedAsJavaModule()
+        localModule.assertNotPublished()
+
+        when:
+        succeeds 'publishToMavenLocal'
+
+        then: "jar is published to maven local repository"
+        localModule.assertPublishedAsJavaModule()
+
+        and:
+        resolveArtifactsFromMavenLocal(repoModule) == ["root-1.0-SNAPSHOT.jar"]
+    }
+
     def "reports failure publishing when model validation fails"() {
         given:
         settingsFile << "rootProject.name = 'bad-project'"

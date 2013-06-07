@@ -33,6 +33,7 @@ import org.gradle.internal.Factory;
 import org.gradle.logging.LoggingManagerInternal;
 
 import javax.inject.Inject;
+import java.io.File;
 import java.util.concurrent.Callable;
 
 /**
@@ -124,6 +125,16 @@ public class PublishToMavenRepository extends DefaultTask {
         this.repository = repository;
     }
 
+    /**
+     * The AntTask Maven Publisher to use.
+     * @param loggingManagerFactory
+     * @param temporaryDirFactory
+     * @return
+     */
+    protected MavenPublisher getAntMavenPublisher(Factory<LoggingManagerInternal> loggingManagerFactory, Factory<File> temporaryDirFactory) {
+        return new AntTaskBackedMavenPublisher(loggingManagerFactory, temporaryDirFactory);
+    }
+
     @TaskAction
     public void publish() {
         MavenPublicationInternal publicationInternal = getPublicationInternal();
@@ -144,7 +155,7 @@ public class PublishToMavenRepository extends DefaultTask {
             @Override
             protected void publish() throws Exception {
                 // TODO:DAZ inject this
-                MavenPublisher antBackedPublisher = new AntTaskBackedMavenPublisher(loggingManagerFactory, getTemporaryDirFactory());
+                MavenPublisher antBackedPublisher = getAntMavenPublisher(loggingManagerFactory, getTemporaryDirFactory());
                 MavenPublisher staticLockingPublisher = new StaticLockingMavenPublisher(antBackedPublisher);
                 MavenPublisher validatingPublisher = new ValidatingMavenPublisher(staticLockingPublisher);
                 validatingPublisher.publish(publication.asNormalisedPublication(), repository);
