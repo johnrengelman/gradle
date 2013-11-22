@@ -32,6 +32,7 @@ import org.gradle.internal.classloader.ClasspathUtil
 import org.gradle.internal.reflect.DirectInstantiator
 import org.gradle.internal.reflect.Instantiator
 import org.gradle.process.ExecResult
+import org.gradle.process.ProcessHandle
 import org.gradle.process.internal.DefaultExecAction
 import org.gradle.process.internal.ExecException
 import org.gradle.test.fixtures.file.TestFile
@@ -258,12 +259,56 @@ public class DefaultFileOperationsTest extends Specification {
         result.exitValue == 0
     }
 
+    def javafork() {
+        File testFile = tmpDir.file("someFile")
+        fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator)
+        List files = ClasspathUtil.getClasspath(getClass().classLoader)
+
+        when:
+        ProcessHandle process = fileOperations.javafork {
+            classpath(files as Object[])
+            main = 'org.gradle.api.internal.file.SomeMain'
+            args testFile.absolutePath
+        }
+
+        then:
+        process.state != null
+
+        when:
+        ExecResult result = process.waitForFinish()
+
+        then:
+        testFile.isFile()
+        result.exitValue == 0
+    }
+
     def javaexecWithNonZeroExitValueShouldThrowException() {
         fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator)
 
         when:
         fileOperations.javaexec {
             main = 'org.gradle.UnknownMain'
+        }
+
+        then:
+        thrown(ExecException)
+    }
+
+    def javaforkWithNonZeroExitValueShouldThrowException() {
+        fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator)
+
+        when:
+        ProcessHandle process = fileOperations.javafork {
+            main = 'org.gradle.UnknownMain'
+        }
+
+        then:
+        assert process.state != null
+
+        when:
+        ExecResult result = process.waitForFinish()
+        if (!process.isIgnoreExitValue()) {
+            result.assertNormalExitValue()
         }
 
         then:
@@ -278,6 +323,25 @@ public class DefaultFileOperationsTest extends Specification {
             main = 'org.gradle.UnknownMain'
             ignoreExitValue = true
         }
+
+        then:
+        result.exitValue != 0
+    }
+
+    def javaforkWithNonZeroExitValueAndIgnoreExitValueShouldNotThrowException() {
+        fileOperations = new DefaultFileOperations(resolver(), taskResolver, temporaryFileProvider, instantiator)
+
+        when:
+        ProcessHandle process = fileOperations.javafork {
+            main = 'org.gradle.UnknownMain'
+            ignoreExitValue = true
+        }
+
+        then:
+        process != null
+
+        when:
+        ExecResult result = process.waitForFinish()
 
         then:
         result.exitValue != 0

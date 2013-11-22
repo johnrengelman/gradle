@@ -20,6 +20,7 @@ package org.gradle.process.internal
 
 import org.gradle.messaging.remote.ConnectionAcceptor
 import org.gradle.messaging.remote.ObjectConnection
+import org.gradle.process.ProcessState
 import org.gradle.process.ExecResult
 import org.gradle.util.JUnit4GroovyMockery
 import org.gradle.util.MultithreadedTestCase
@@ -73,7 +74,7 @@ class DefaultWorkerProcessTest extends MultithreadedTestCase {
         context.checking {
             one(execHandle).start()
             one(execHandle).getState()
-            will(returnValue(ExecHandleState.STARTED))
+            will(returnValue(ProcessState.STARTED))
             one(acceptor).stop()
         }
 

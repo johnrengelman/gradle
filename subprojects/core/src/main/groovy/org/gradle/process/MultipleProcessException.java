@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 the original author or authors.
+ * Copyright 2013 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.gradle.process;
 
-package org.gradle.process.internal;
+import org.gradle.internal.exceptions.AbstractMultiCauseException;
 
-import org.gradle.process.ProcessHandle;
+import java.util.List;
 
-public interface ExecHandle extends ProcessHandle {
+/**
+ * Exception that wraps exceptions from multiple forked processes.
+ */
+public class MultipleProcessException extends AbstractMultiCauseException {
 
-    /**
-     * Starts this process, blocking until the process has started.
-     *
-     * @return this
-     */
-    ExecHandle start();
+    public MultipleProcessException(Iterable<? extends Throwable> causes) {
+        super("Multiple process exceptions", causes);
+    }
 
-    void abort();
-
-    void addListener(ExecHandleListener listener);
-
-    void removeListener(ExecHandleListener listener);
+    public void replaceCauses(List<? extends Throwable> causes) {
+        super.initCauses(causes);
+    }
 }

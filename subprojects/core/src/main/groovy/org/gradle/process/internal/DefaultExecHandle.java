@@ -22,6 +22,7 @@ import org.gradle.api.logging.Logging;
 import org.gradle.internal.concurrent.DefaultExecutorFactory;
 import org.gradle.internal.concurrent.StoppableExecutor;
 import org.gradle.listener.ListenerBroadcast;
+import org.gradle.process.ProcessState;
 import org.gradle.process.ExecResult;
 import org.gradle.process.internal.shutdown.ShutdownHookActionRegister;
 import org.gradle.process.internal.streams.StreamsHandler;
@@ -77,6 +78,7 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
     private final boolean redirectErrorStream;
     private int timeoutMillis;
     private boolean daemon;
+    private boolean ignoreExitValue;
 
     /**
      * Lock to guard all mutable state
@@ -90,7 +92,7 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
     /**
      * State of this ExecHandle.
      */
-    private ExecHandleState state;
+    private ProcessState state;
 
     /**
      * When not null, the runnable that is waiting
@@ -105,7 +107,7 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
 
     DefaultExecHandle(String displayName, File directory, String command, List<String> arguments,
                       Map<String, String> environment, StreamsHandler streamsHandler,
-                      List<ExecHandleListener> listeners, boolean redirectErrorStream, int timeoutMillis, boolean daemon) {
+                      List<ExecHandleListener> listeners, boolean redirectErrorStream, int timeoutMillis, boolean daemon, boolean ignoreExitValue) {
         this.displayName = displayName;
         this.directory = directory;
         this.command = command;
@@ -117,7 +119,8 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
         this.daemon = daemon;
         this.lock = new ReentrantLock();
         this.condition = lock.newCondition();
-        this.state = ExecHandleState.INIT;
+        this.state = ProcessState.INIT;
+        this.ignoreExitValue = ignoreExitValue;
         executor = new DefaultExecutorFactory().create(String.format("Run %s", displayName));
         shutdownHookAction = new ExecHandleShutdownHookAction(this);
         broadcast = new ListenerBroadcast<ExecHandleListener>(ExecHandleListener.class);
@@ -136,6 +139,10 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
         return daemon;
     }
 
+    public boolean isIgnoreExitValue() {
+        return ignoreExitValue;
+    }
+
     @Override
     public String toString() {
         return displayName;
@@ -149,7 +156,7 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
         return Collections.unmodifiableMap(environment);
     }
 
-    public ExecHandleState getState() {
+    public ProcessState getState() {
         lock.lock();
         try {
             return state;
@@ -158,7 +165,7 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
         }
     }
 
-    private void setState(ExecHandleState state) {
+    private void setState(ProcessState state) {
         lock.lock();
         try {
             LOGGER.debug("Changing state to: {}", state);
@@ -169,7 +176,7 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
         }
     }
 
-    private boolean stateIn(ExecHandleState... states) {
+    private boolean stateIn(ProcessState... states) {
         lock.lock();
         try {
             return Arrays.asList(states).contains(this.state);
@@ -178,17 +185,17 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
         }
     }
 
-    private void setEndStateInfo(ExecHandleState newState, int exitValue, Throwable failureCause) {
+    private void setEndStateInfo(ProcessState newState, int exitValue, Throwable failureCause) {
         ShutdownHookActionRegister.removeAction(shutdownHookAction);
 
         ExecResultImpl result;
-        ExecHandleState currentState;
+        ProcessState currentState;
         lock.lock();
         try {
             currentState = this.state;
             ExecException wrappedException = null;
             if (failureCause != null) {
-                if (currentState == ExecHandleState.STARTING) {
+                if (currentState == ProcessState.STARTING) {
                     wrappedException = new ExecException(String.format("A problem occurred starting process '%s'",
                             displayName), failureCause);
                 } else {
@@ -205,7 +212,7 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
 
         LOGGER.debug("Process '{}' finished with exit value {} (state: {})", displayName, exitValue, newState);
 
-        if (currentState != ExecHandleState.DETACHED && newState != ExecHandleState.DETACHED) {
+        if (currentState != ProcessState.DETACHED && newState != ProcessState.DETACHED) {
             broadcast.getSource().executionFinished(this, result);
         }
         executor.requestStop();
@@ -219,15 +226,15 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
         }
         lock.lock();
         try {
-            if (!stateIn(ExecHandleState.INIT)) {
+            if (!stateIn(ProcessState.INIT)) {
                 throw new IllegalStateException(String.format("Cannot start process '%s' because it has already been started", displayName));
             }
-            setState(ExecHandleState.STARTING);
+            setState(ProcessState.STARTING);
 
             execHandleRunner = new ExecHandleRunner(this, streamsHandler);
             executor.execute(execHandleRunner);
 
-            while(stateIn(ExecHandleState.STARTING)) {
+            while(stateIn(ProcessState.STARTING)) {
                 LOGGER.debug("Waiting until process started: {}.", displayName);
                 try {
                     condition.await();
@@ -250,10 +257,10 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
     public void abort() {
         lock.lock();
         try {
-            if (state == ExecHandleState.SUCCEEDED) {
+            if (state == ProcessState.SUCCEEDED) {
                 return;
             }
-            if (!stateIn(ExecHandleState.STARTED, ExecHandleState.DETACHED)) {
+            if (!stateIn(ProcessState.STARTED, ProcessState.DETACHED)) {
                 throw new IllegalStateException(String.format("Cannot abort process '%s' because it is not in started or detached state", displayName));
             }
             this.execHandleRunner.abortProcess();
@@ -265,7 +272,7 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
     public ExecResult waitForFinish() {
         lock.lock();
         try {
-            while (!stateIn(ExecHandleState.SUCCEEDED, ExecHandleState.ABORTED, ExecHandleState.FAILED, ExecHandleState.DETACHED)) {
+            while (!stateIn(ProcessState.SUCCEEDED, ProcessState.ABORTED, ProcessState.FAILED, ProcessState.DETACHED)) {
                 try {
                     condition.await();
                 } catch (InterruptedException e) {
@@ -292,20 +299,20 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
     }
 
     void detached() {
-        setEndStateInfo(ExecHandleState.DETACHED, 0, null);
+        setEndStateInfo(ProcessState.DETACHED, 0, null);
     }
 
     void started() {
         ShutdownHookActionRegister.addAction(shutdownHookAction);
-        setState(ExecHandleState.STARTED);
+        setState(ProcessState.STARTED);
         broadcast.getSource().executionStarted(this);
     }
 
     void finished(int exitCode) {
         if (exitCode != 0) {
-            setEndStateInfo(ExecHandleState.FAILED, exitCode, null);
+            setEndStateInfo(ProcessState.FAILED, exitCode, null);
         } else {
-            setEndStateInfo(ExecHandleState.SUCCEEDED, 0, null);
+            setEndStateInfo(ProcessState.SUCCEEDED, 0, null);
         }
     }
 
@@ -314,11 +321,11 @@ public class DefaultExecHandle implements ExecHandle, ProcessSettings {
             // This can happen on Windows
             exitCode = -1;
         }
-        setEndStateInfo(ExecHandleState.ABORTED, exitCode, null);
+        setEndStateInfo(ProcessState.ABORTED, exitCode, null);
     }
 
     void failed(Throwable failureCause) {
-        setEndStateInfo(ExecHandleState.FAILED, -1, failureCause);
+        setEndStateInfo(ProcessState.FAILED, -1, failureCause);
     }
 
     public void addListener(ExecHandleListener listener) {

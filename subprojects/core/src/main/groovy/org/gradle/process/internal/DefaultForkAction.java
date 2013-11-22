@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 the original author or authors.
+ * Copyright 2013 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,23 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.gradle.process.internal;
 
+import org.gradle.api.internal.file.FileResolver;
 import org.gradle.process.ProcessHandle;
 
-public interface ExecHandle extends ProcessHandle {
+public class DefaultForkAction extends ExecHandleBuilder implements ForkAction {
 
-    /**
-     * Starts this process, blocking until the process has started.
-     *
-     * @return this
-     */
-    ExecHandle start();
+    public DefaultForkAction(FileResolver fileResolver) {
+        super(fileResolver);
+    }
 
-    void abort();
-
-    void addListener(ExecHandleListener listener);
-
-    void removeListener(ExecHandleListener listener);
+    public ProcessHandle fork() throws ExecException {
+        ExecHandle execHandle = build();
+        return execHandle.start();
+    }
 }

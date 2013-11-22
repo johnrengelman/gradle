@@ -1,5 +1,5 @@
 /*
- * Copyright 2009 the original author or authors.
+ * Copyright 2013 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.gradle.process.internal;
 
-public enum ExecHandleState {
-    INIT,
-    STARTING,
-    STARTED,
-    ABORTED,
-    FAILED,
-    DETACHED,
-    SUCCEEDED
+import org.gradle.api.NonExtensible;
+import org.gradle.process.ExecSpec;
+import org.gradle.process.ProcessHandle;
+
+@NonExtensible
+public interface ForkAction extends ExecSpec {
+
+    ProcessHandle fork() throws ExecException;
+
 }

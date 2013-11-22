@@ -21,9 +21,9 @@ import org.gradle.api.Action;
 import org.gradle.internal.Factory;
 import org.gradle.internal.UncheckedException;
 import org.gradle.process.ExecResult;
+import org.gradle.process.ProcessState;
 import org.gradle.process.internal.AbstractExecHandleBuilder;
 import org.gradle.process.internal.ExecHandle;
-import org.gradle.process.internal.ExecHandleState;
 
 import java.io.ByteArrayOutputStream;
 import java.io.UnsupportedEncodingException;
@@ -81,7 +81,7 @@ class ForkingGradleHandle extends OutputScrapingGradleHandle {
     }
 
     public boolean isRunning() {
-        return execHandle != null && execHandle.getState() == ExecHandleState.STARTED;
+        return execHandle != null && execHandle.getState() == ProcessState.STARTED;
     }
 
     protected ExecHandle getExecHandle() {

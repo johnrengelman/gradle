@@ -20,6 +20,7 @@ import org.gradle.api.Action;
 import org.gradle.api.InvalidUserDataException;
 import org.gradle.api.PathValidation;
 import org.gradle.api.file.*;
+import org.gradle.api.internal.AsyncProcessOperations;
 import org.gradle.api.internal.ClosureBackedAction;
 import org.gradle.api.internal.ProcessOperations;
 import org.gradle.api.internal.file.archive.TarFileTree;
@@ -37,18 +38,22 @@ import org.gradle.api.resources.ReadableResource;
 import org.gradle.api.tasks.WorkResult;
 import org.gradle.internal.reflect.Instantiator;
 import org.gradle.process.ExecResult;
+import org.gradle.process.MultipleProcessException;
+import org.gradle.process.ProcessHandle;
 import org.gradle.process.internal.*;
 import org.gradle.util.ConfigureUtil;
 import org.gradle.util.GFileUtils;
 
 import java.io.File;
 import java.net.URI;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.gradle.util.ConfigureUtil.configure;
 
-public class DefaultFileOperations implements FileOperations, ProcessOperations, ExecActionFactory {
+public class DefaultFileOperations implements FileOperations, ProcessOperations, ExecActionFactory, AsyncProcessOperations {
     private final FileResolver fileResolver;
     private final TaskResolver taskResolver;
     private final TemporaryFileProvider temporaryFileProvider;
@@ -174,6 +179,44 @@ public class DefaultFileOperations implements FileOperations, ProcessOperations,
     public ExecResult exec(Closure cl) {
         ExecAction execAction = ConfigureUtil.configure(cl, instantiator.newInstance(DefaultExecAction.class, fileResolver));
         return execAction.execute();
+    }
+
+    public ProcessHandle javafork(Closure cl) {
+        JavaForkAction javaForkAction = ConfigureUtil.configure(cl, instantiator.newInstance(DefaultJavaForkAction.class, fileResolver));
+        return javaForkAction.fork();
+    }
+
+    public ProcessHandle fork(Closure cl) {
+        ForkAction forkAction = ConfigureUtil.configure(cl, instantiator.newInstance(DefaultForkAction.class, fileResolver));
+        return forkAction.fork();
+    }
+
+    public ExecResult waitForFinish(ProcessHandle fork) {
+        ExecResult result = fork.waitForFinish();
+        if (!fork.isIgnoreExitValue()) {
+            result.assertNormalExitValue();
+        }
+        return result;
+    }
+
+    public List<ExecResult> waitForFinish(List<ProcessHandle> forks) {
+        List<ExecResult> results = new ArrayList<ExecResult>();
+        List<Throwable> throwables = new ArrayList<Throwable>();
+        for (ProcessHandle fork : forks) {
+            ExecResult result = fork.waitForFinish();
+            results.add(result);
+            if (fork.isIgnoreExitValue()) {
+                try {
+                    result.assertNormalExitValue();
+                }  catch (ExecException e) {
+                    throwables.add(e);
+                }
+            }
+        }
+        if (!throwables.isEmpty()) {
+            throw new MultipleProcessException(throwables);
+        }
+        return results;
     }
 
     public ExecAction newExecAction() {

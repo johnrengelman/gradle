@@ -17,6 +17,7 @@
 package org.gradle.process.internal
 
 import org.gradle.process.ExecResult
+import org.gradle.process.ProcessState
 import org.gradle.process.internal.streams.StreamsHandler
 import org.gradle.test.fixtures.file.TestNameTestDirectoryProvider
 import org.gradle.util.GUtil
@@ -47,7 +48,7 @@ class DefaultExecHandleSpec extends Specification {
         def result = execHandle.start().waitForFinish();
 
         then:
-        execHandle.state == ExecHandleState.SUCCEEDED
+        execHandle.state == ProcessState.SUCCEEDED
         result.exitValue == 0
         out.toString() == "output args: [arg1, arg2]"
         err.toString() == "error args: [arg1, arg2]"
@@ -67,7 +68,7 @@ class DefaultExecHandleSpec extends Specification {
         handle.waitForFinish();
 
         then:
-        execHandle.state == ExecHandleState.SUCCEEDED
+        execHandle.state == ProcessState.SUCCEEDED
     }
 
     void "understands when application exits with non-zero"() {
@@ -78,7 +79,7 @@ class DefaultExecHandleSpec extends Specification {
         def result = execHandle.start().waitForFinish();
 
         then:
-        execHandle.state == ExecHandleState.FAILED
+        execHandle.state == ProcessState.FAILED
         result.exitValue == 72
 
         when:
@@ -109,7 +110,7 @@ class DefaultExecHandleSpec extends Specification {
         def result = execHandle.waitForFinish();
 
         then:
-        execHandle.state == ExecHandleState.ABORTED
+        execHandle.state == ProcessState.ABORTED
         result.exitValue != 0
     }
 
@@ -137,7 +138,7 @@ class DefaultExecHandleSpec extends Specification {
 
         then:
         output.toString().contains "I'm the daemon"
-        execHandle.state == ExecHandleState.DETACHED
+        execHandle.state == ProcessState.DETACHED
 
         cleanup:
         execHandle.abort()
@@ -153,14 +154,14 @@ class DefaultExecHandleSpec extends Specification {
         execHandle.waitForFinish();
 
         then:
-        execHandle.state == ExecHandleState.DETACHED
+        execHandle.state == ProcessState.DETACHED
 
         when:
         execHandle.abort()
         def result = execHandle.waitForFinish()
 
         then:
-        execHandle.state == ExecHandleState.ABORTED
+        execHandle.state == ProcessState.ABORTED
         result.exitValue != 0
     }
 
@@ -198,7 +199,7 @@ class DefaultExecHandleSpec extends Specification {
         execHandle.waitForFinish()
 
         then:
-        execHandle.state == ExecHandleState.SUCCEEDED
+        execHandle.state == ProcessState.SUCCEEDED
     }
 
     @Ignore
@@ -212,7 +213,7 @@ class DefaultExecHandleSpec extends Specification {
         execHandle.waitForFinish()
 
         then:
-        execHandle.state == ExecHandleState.SUCCEEDED
+        execHandle.state == ProcessState.SUCCEEDED
     }
 
     @Ignore
@@ -225,7 +226,7 @@ class DefaultExecHandleSpec extends Specification {
         def detachResult = execHandle.detach();
 
         then:
-        execHandle.state == ExecHandleState.FAILED
+        execHandle.state == ProcessState.FAILED
         detachResult.processCompleted
         detachResult.execResult.exitValue == 72
     }
@@ -285,7 +286,7 @@ class DefaultExecHandleSpec extends Specification {
 
         then:
         result.exitValue != 0
-        execHandle.state == ExecHandleState.ABORTED
+        execHandle.state == ProcessState.ABORTED
     }
 
     static class Prints implements Callable, Serializable {

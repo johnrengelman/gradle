@@ -1,5 +1,5 @@
 /*
- * Copyright 2010 the original author or authors.
+ * Copyright 2009 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,17 @@
  * limitations under the License.
  */
 
-package org.gradle.process.internal;
+package org.gradle.process;
 
-import org.gradle.process.ProcessHandle;
-
-public interface ExecHandle extends ProcessHandle {
-
-    /**
-     * Starts this process, blocking until the process has started.
-     *
-     * @return this
-     */
-    ExecHandle start();
-
-    void abort();
-
-    void addListener(ExecHandleListener listener);
-
-    void removeListener(ExecHandleListener listener);
+/**
+ * The current execution state of a process.
+ */
+public enum ProcessState {
+    INIT,
+    STARTING,
+    STARTED,
+    ABORTED,
+    FAILED,
+    DETACHED,
+    SUCCEEDED
 }
