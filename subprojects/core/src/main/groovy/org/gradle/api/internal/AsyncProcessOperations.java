@@ -29,5 +29,5 @@ public interface AsyncProcessOperations {
 
     ExecResult waitForFinish(ProcessHandle fork);
 
-    List<ExecResult> waitForFinish(List<ProcessHandle> fork);
+    List<ExecResult> waitForFinish(List<ProcessHandle> forks);
 }
